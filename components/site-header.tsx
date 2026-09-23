@@ -53,15 +53,15 @@ export function SiteHeader() {
       </div>
 
       {/* Main navbar */}
-      <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3">
-        {/* Logo and Premium Text with Dark Mode Fixes */}
-        <a href="/" className="flex items-center shrink-0 gap-3">
-          <img src="/logo.png" alt="Pulse Logo" className="h-16 md:h-18 w-auto object-contain" />
-          <div className="hidden sm:flex flex-col justify-center">
-            <span className="text-xl md:text-2xl font-extrabold text-slate-800 dark:text-white tracking-tight leading-tight">
+      <div className="mx-auto flex max-w-7xl items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3">
+        {/* Logo and Hospital Name Fixed for Mobile & Dark Mode */}
+        <a href="/" className="flex items-center shrink-0 gap-2 sm:gap-3">
+          <img src="/logo.png" alt="Pulse Logo" className="h-12 sm:h-16 md:h-18 w-auto object-contain" />
+          <div className="flex flex-col justify-center">
+            <span className="text-sm sm:text-xl md:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-tight">
               Pulse Specialised
             </span>
-            <span className="text-xs md:text-sm font-bold text-blue-600 dark:text-blue-400 tracking-widest uppercase mt-0.5">
+            <span className="text-[10px] sm:text-xs md:text-sm font-bold text-blue-600 dark:text-blue-400 tracking-widest uppercase mt-0.5">
               Hospital Ltd.
             </span>
           </div>
@@ -84,7 +84,7 @@ export function SiteHeader() {
           <a
             href="#report"
             aria-label="Report / Appointment"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-primary px-3 text-sm font-semibold text-primary-foreground shadow-sm transition hover:opacity-90 sm:px-4"
+            className="hidden sm:inline-flex h-10 items-center justify-center gap-2 rounded-full bg-primary px-3 text-sm font-semibold text-primary-foreground shadow-sm transition hover:opacity-90 sm:px-4"
           >
             <FileText className="size-4" aria-hidden="true" />
             <span className="hidden sm:inline">Report / Appointment</span>
@@ -104,7 +104,7 @@ export function SiteHeader() {
 
       {/* Mobile menu */}
       {menuOpen && (
-        <div className="border-t border-border bg-background lg:hidden">
+        <div className="border-t border-border bg-background lg:hidden shadow-lg">
           <div className="mx-auto max-w-7xl space-y-3 px-4 py-4">
             <form role="search" className="relative flex items-center">
               <Search className="pointer-events-none absolute left-3 size-4 text-muted-foreground" aria-hidden="true" />
@@ -112,7 +112,7 @@ export function SiteHeader() {
                 type="search"
                 placeholder="Search doctors, specialities..."
                 aria-label="Search doctors and specialities"
-                className="h-10 w-full rounded-full border border-input bg-muted/40 pl-9 pr-4 text-sm outline-none transition focus:border-primary focus:bg-background focus:ring-2 focus:ring-ring/40"
+                className="h-10 w-full rounded-full border border-input bg-muted/40 pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground outline-none transition focus:border-primary focus:bg-background focus:ring-2 focus:ring-ring/40"
               />
             </form>
             <nav className="flex flex-col" aria-label="Mobile">
