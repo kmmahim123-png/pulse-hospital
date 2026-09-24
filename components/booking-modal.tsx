@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useId, useState } from "react"
-import { CheckCircle2, Loader2, X, Calendar as CalendarIcon, User, Phone, AlertCircle } from "lucide-react"
+import { CheckCircle2, Loader2, X, Calendar as CalendarIcon, User, Phone, AlertCircle, Download } from "lucide-react"
 import type { Doctor } from "@/lib/doctors"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
@@ -129,6 +129,10 @@ export function BookingModal({ doctor, open, onClose }: { doctor: Doctor | null,
     }
   }
 
+  const handleDownloadSlip = () => {
+    window.print()
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 sm:p-6 backdrop-blur-sm pt-20">
       <div className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col max-h-[85vh]">
@@ -151,12 +155,59 @@ export function BookingModal({ doctor, open, onClose }: { doctor: Doctor | null,
 
         <div className="overflow-y-auto flex-1">
           {submitted ? (
-            <div className="px-6 py-12 text-center">
-              <CheckCircle2 className="mx-auto size-16 text-green-500 mb-4" />
-              <h3 className="text-2xl font-bold text-gray-800">Booking Confirmed!</h3>
-              <p className="mt-1 text-gray-500">Your serial number for the selected date is:</p>
-              <p className="mt-3 text-5xl font-extrabold text-blue-600">#{serialNumber}</p>
-              <Button className="mt-8 w-full rounded-lg h-12 text-lg" onClick={onClose}>Done</Button>
+            <div className="px-6 py-8 text-center space-y-4">
+              <CheckCircle2 className="mx-auto size-14 text-green-500 mb-2" />
+              <div>
+                <h3 className="text-2xl font-bold text-gray-800">Booking Confirmed!</h3>
+                <p className="text-sm text-gray-500 mt-1">Your serial number for the selected date is:</p>
+              </div>
+
+              <div className="inline-block bg-blue-50 border border-blue-200 px-6 py-2 rounded-xl">
+                <span className="text-3xl font-black text-blue-600">#{String(serialNumber).padStart(2, '0')}</span>
+              </div>
+
+              {/* Slip Details Box */}
+              <div id="appointment-slip" className="bg-gray-50 p-4 rounded-xl text-left space-y-2 text-sm border border-gray-200">
+                <div className="flex justify-between border-b pb-2">
+                  <span className="text-gray-500">Serial No:</span>
+                  <span className="font-bold text-blue-600">#{String(serialNumber).padStart(2, '0')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Patient Name:</span>
+                  <span className="font-medium text-gray-800">{name} (Age: {age})</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Phone:</span>
+                  <span className="font-medium text-gray-800">{phone}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Doctor Name:</span>
+                  <span className="font-medium text-gray-800">{doctor.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Room No:</span>
+                  <span className="font-bold text-gray-800">Room {doctor.room || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Date & Time:</span>
+                  <span className="font-medium text-gray-800">{selectedDate} ({doctor.schedule?.[0]?.time || 'Evening'})</span>
+                </div>
+                <div className="flex justify-between border-t pt-2 font-semibold">
+                  <span className="text-gray-500">Payable Amount:</span>
+                  <span className="text-emerald-600">৳{doctor.fee || '800'}</span>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-2">
+                <button 
+                  onClick={handleDownloadSlip} 
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-xl transition shadow-sm text-xs flex items-center justify-center gap-2"
+                >
+                  <Download className="size-4" /> Download Slip / Print
+                </button>
+                <Button className="px-6 rounded-xl h-11 text-sm bg-gray-200 hover:bg-gray-300 text-gray-800" onClick={onClose}>Done</Button>
+              </div>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="px-6 py-5 text-gray-800">
@@ -224,7 +275,7 @@ export function BookingModal({ doctor, open, onClose }: { doctor: Doctor | null,
                   {phone.length > 0 && phone.length < 11 && <span className="text-[10px] text-red-500">Must be exactly 11 digits</span>}
                 </label>
 
-                {/* Symptoms Textarea Restored Here */}
+                {/* Symptoms Textarea */}
                 <label className="flex flex-col gap-1.5 sm:col-span-2 mt-2">
                   <span className="text-xs font-semibold uppercase text-gray-500">Describe your symptoms</span>
                   <textarea rows={3} value={symptoms} onChange={(e) => setSymptoms(e.target.value)} placeholder="Fever, headache, etc." className="rounded-lg border px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none" />
