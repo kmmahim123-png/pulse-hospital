@@ -120,6 +120,25 @@ export function BookingModal({ doctor, open, onClose }: { doctor: Doctor | null,
 
       if (insertError) throw insertError
 
+      // Appointment কনফার্ম হওয়ার সাথে সাথে এসএমএস API কল করা
+      const appointmentTime = doctor.schedule?.[0]?.time || 'Evening'
+      try {
+        await fetch('/api/send-sms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone: phone.trim(),
+            name: name.trim(),
+            serial: nextSerial,
+            date: selectedDate,
+            time: appointmentTime,
+            doctorName: doctor.name
+          })
+        })
+      } catch (smsErr) {
+        console.error("Failed to trigger SMS:", smsErr)
+      }
+
       setSerialNumber(nextSerial)
       setSubmitted(true)
     } catch (err: any) {
@@ -173,7 +192,7 @@ export function BookingModal({ doctor, open, onClose }: { doctor: Doctor | null,
       <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 sm:p-6 backdrop-blur-sm pt-20">
         <div className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col max-h-[85vh]">
           
-          {/* Header Section */}
+          {/* Header Section (ছবি ছাড়া পরিপাটি ডিজাইন) */}
           <div className="relative bg-blue-600 px-6 py-5 text-white flex-shrink-0">
             <button 
               onClick={onClose} 
