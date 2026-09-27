@@ -27,17 +27,22 @@ export default function AdminDashboard() {
     return { dbDate, displayDate };
   });
 
-  // ফর্মে সিলেক্ট করার জন্য
-  const [selectedDoctor, setSelectedDoctor] = useState<string>("")
-  const [selectedDate, setSelectedDate] = useState<string>(availableDates[0].dbDate)
+  // ফর্মে সিলেক্ট করার জন্য ("all" ba doctor id)
+  const [selectedDoctor, setSelectedDoctor] = useState<string>("all")
+  // "all" date ba specific date select korar jonno ("all" mane 7 diner aksathe)
+  const [selectedDate, setSelectedDate] = useState<string>("all")
 
   // Search বাটনে ক্লিক করার পর যেটা অ্যাপ্লাই হবে
-  const [appliedDoctor, setAppliedDoctor] = useState<string>("")
-  const [appliedDate, setAppliedDate] = useState<string>(availableDates[0].dbDate)
+  const [appliedDoctor, setAppliedDoctor] = useState<string>("all")
+  const [appliedDate, setAppliedDate] = useState<string>("all")
 
   const [reportPhone, setReportPhone] = useState('')
-  const [reportName, setReportName] = useState('')
-  const [reportFile, setReportFile] = useState<File | null>(null)
+  
+  // Multiple reports upload er jonno state array (with + icon support)
+  const [reportRows, setReportRows] = useState<{ name: string; file: File | null }[]>([
+    { name: '', file: null }
+  ])
+
   const [uploading, setUploading] = useState(false)
 
   // Session check on initial load
@@ -49,7 +54,7 @@ export default function AdminDashboard() {
     setIsAuthChecking(false)
   }, [])
 
-  // Initial Data Load (ডাক্তারদের লিস্ট শুধু একবার লোড হবে)
+  // Initial Data Load
   useEffect(() => {
     if (isAuthenticated) {
       cleanupOldBookings().then(() => fetchInitialData())
@@ -79,12 +84,9 @@ export default function AdminDashboard() {
 
   async function fetchInitialData() {
     setLoading(true)
-    // ডাক্তারদের লিস্ট শুধু একবার কল হবে
     const { data: doctorsData } = await supabase.from('doctors').select('*')
     if (doctorsData && doctorsData.length > 0) {
       setDoctors(doctorsData)
-      setSelectedDoctor(doctorsData[0].id.toString()) 
-      setAppliedDoctor(doctorsData[0].id.toString())
     }
     await fetchDynamicData()
     setLoading(false)
@@ -132,43 +134,56 @@ export default function AdminDashboard() {
     await supabase.from('sample_requests').update({ status: 'Completed' }).eq('id', id)
   }
 
-  const downloadCSV = () => {
-    const headers = ['Serial', 'Patient Name', 'Phone', 'Doctor', 'Status', 'Date']
-    const rows = filteredBookings.map(b => [
-      b.serial_number, b.patient_name, b.phone, b.doctors?.name || 'Unknown', b.status || 'Pending', new Date(b.booking_date).toLocaleDateString('en-GB')
-    ])
-    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n")
-    const encodedUri = encodeURI(csvContent)
-    const link = document.createElement("a")
-    link.setAttribute("href", encodedUri)
-    link.setAttribute("download", `appointments_${appliedDate}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+  // Download PDF Function
+  const downloadPDF = () => {
+    window.print()
   }
 
-  async function handleUploadReport(e: React.FormEvent) {
+  // Add more report row (+ icon functionality)
+  const addReportRow = () => {
+    setReportRows([...reportRows, { name: '', file: null }])
+  }
+
+  // Remove report row
+  const removeReportRow = (index: number) => {
+    const updated = reportRows.filter((_, i) => i !== index)
+    setReportRows(updated)
+  }
+
+  // Handle multiple upload reports
+  async function handleUploadReports(e: React.FormEvent) {
     e.preventDefault()
-    if (!reportFile || !reportPhone || !reportName) return
+    if (!reportPhone || reportRows.length === 0) return
     
+    // Check if files are selected
+    for (const row of reportRows) {
+      if (!row.name || !row.file) {
+        alert('Please fill all report names and select files.')
+        return
+      }
+    }
+
     setUploading(true)
     try {
-      const fileExt = reportFile.name.split('.').pop()
-      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
-      
-      const { error: uploadError } = await supabase.storage.from('reports').upload(fileName, reportFile)
-      if (uploadError) throw uploadError
+      for (const row of reportRows) {
+        const fileExt = row.file!.name.split('.').pop()
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
+        
+        const { error: uploadError } = await supabase.storage.from('reports').upload(fileName, row.file!)
+        if (uploadError) throw uploadError
 
-      const { data: { publicUrl } } = supabase.storage.from('reports').getPublicUrl(fileName)
-      const { error: dbError } = await supabase.from('reports').insert({ patient_phone: reportPhone, file_url: publicUrl, report_name: reportName })
-      if (dbError) throw dbError
+        const { data: { publicUrl } } = supabase.storage.from('reports').getPublicUrl(fileName)
+        const { error: dbError } = await supabase.from('reports').insert({ 
+          patient_phone: reportPhone, 
+          file_url: publicUrl, 
+          report_name: row.name 
+        })
+        if (dbError) throw dbError
+      }
 
-      alert('Report uploaded successfully!')
+      alert('All reports uploaded successfully!')
       setReportPhone('')
-      setReportName('')
-      setReportFile(null)
-      const fileInput = document.getElementById('file-upload') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
+      setReportRows([{ name: '', file: null }])
     } catch (err: any) {
       alert("Error: " + err.message)
     } finally {
@@ -200,8 +215,13 @@ export default function AdminDashboard() {
 
   if (loading) return <div className="min-h-screen bg-gray-50 p-10 text-center font-semibold text-gray-600">Loading Professional Dashboard...</div>
 
-  // এখন appliedDoctor এবং appliedDate এর উপর ভিত্তি করে ফিল্টার হবে
-  const filteredBookings = bookings.filter(b => b.doctor_id?.toString() === appliedDoctor && b.booking_date === appliedDate)
+  // Filtering based on appliedDoctor and appliedDate (Supports "all")
+  const filteredBookings = bookings.filter(b => {
+    const matchDoctor = appliedDoctor === 'all' || b.doctor_id?.toString() === appliedDoctor
+    const matchDate = appliedDate === 'all' || b.booking_date === appliedDate
+    return matchDoctor && matchDate
+  })
+
   const activeBookings = filteredBookings.filter(b => b.status !== 'Completed').length
 
   return (
@@ -234,6 +254,7 @@ export default function AdminDashboard() {
               <div className="flex items-center gap-2">
                 <label className="text-sm font-semibold text-gray-600">Doctor:</label>
                 <select value={selectedDoctor} onChange={(e) => setSelectedDoctor(e.target.value)} className="px-3 py-1.5 border rounded-md bg-gray-50 font-medium outline-none focus:ring-2 focus:ring-blue-500 text-sm min-w-[200px]">
+                  <option value="all">All Doctors</option>
                   {doctors.map(doc => (<option key={doc.id} value={doc.id}>{doc.name}</option>))}
                 </select>
               </div>
@@ -244,6 +265,7 @@ export default function AdminDashboard() {
                   onChange={(e) => setSelectedDate(e.target.value)} 
                   className="px-3 py-1.5 border rounded-md bg-gray-50 font-medium outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 >
+                  <option value="all">All 7 Days (Aksathe)</option>
                   {availableDates.map(date => (
                     <option key={date.dbDate} value={date.dbDate}>
                       {date.displayDate}
@@ -252,7 +274,6 @@ export default function AdminDashboard() {
                 </select>
               </div>
               
-              {/* Search Appointments Button Added Here */}
               <button 
                 onClick={handleSearchAppointments} 
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-md text-sm font-bold transition shadow-sm"
@@ -260,25 +281,27 @@ export default function AdminDashboard() {
                 Search Appointments
               </button>
 
-              <button onClick={downloadCSV} className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-md text-sm font-medium transition shadow-sm ml-auto">
-                Download CSV
+              <button onClick={downloadPDF} className="bg-red-600 hover:bg-red-700 text-white px-4 py-1.5 rounded-md text-sm font-medium transition shadow-sm ml-auto">
+                Download PDF
               </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-500">Selected Date Total</h2>
+                <h2 className="text-lg font-semibold text-gray-500">Total Appointments</h2>
                 <p className="text-4xl font-bold mt-2 text-blue-600">{filteredBookings.length}</p>
               </div>
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-500">Selected Date Pending</h2>
+                <h2 className="text-lg font-semibold text-gray-500">Pending Appointments</h2>
                 <p className="text-4xl font-bold mt-2 text-orange-500">{activeBookings}</p>
               </div>
             </div>
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-12">
               <div className="px-6 py-4 border-b bg-gray-50 flex justify-between items-center">
-                <h2 className="text-xl font-semibold">Appointments for {new Date(appliedDate).toLocaleDateString('en-GB')}</h2>
+                <h2 className="text-xl font-semibold">
+                  Appointments List ({appliedDate === 'all' ? 'All 7 Days' : new Date(appliedDate).toLocaleDateString('en-GB')})
+                </h2>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
@@ -286,6 +309,8 @@ export default function AdminDashboard() {
                     <tr className="bg-gray-100 text-sm uppercase tracking-wider">
                       <th className="px-6 py-3 border-b font-medium">Serial</th>
                       <th className="px-6 py-3 border-b font-medium">Patient Details</th>
+                      <th className="px-6 py-3 border-b font-medium">Doctor</th>
+                      <th className="px-6 py-3 border-b font-medium">Date</th>
                       <th className="px-6 py-3 border-b font-medium">Status</th>
                       <th className="px-6 py-3 border-b font-medium text-center">Action</th>
                     </tr>
@@ -301,6 +326,8 @@ export default function AdminDashboard() {
                             <div className="text-xs text-orange-600 mt-1.5 bg-orange-50 inline-block px-2 py-0.5 rounded border border-orange-100"><span className="font-semibold">Symptoms:</span> {booking.symptoms}</div>
                           )}
                         </td>
+                        <td className="px-6 py-4 text-sm font-medium text-gray-700">{booking.doctors?.name || 'N/A'}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{new Date(booking.booking_date).toLocaleDateString('en-GB')}</td>
                         <td className="px-6 py-4">
                           {booking.status === 'Completed' ? (<span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">✓ Completed</span>) : (<span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-bold">Pending</span>)}
                         </td>
@@ -310,7 +337,7 @@ export default function AdminDashboard() {
                       </tr>
                     ))}
                     {filteredBookings.length === 0 && (
-                      <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500 font-medium">No appointments found for this doctor on selected date.</td></tr>
+                      <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-500 font-medium">No appointments found.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -322,23 +349,55 @@ export default function AdminDashboard() {
         {activeTab === 'lab' && (
           <div>
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-8">
-              <h2 className="text-xl font-semibold mb-4 text-gray-800">Upload Pathology Report</h2>
-              <form onSubmit={handleUploadReport} className="flex flex-wrap gap-4 items-end">
-                <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+              <h2 className="text-xl font-semibold mb-4 text-gray-800">Report Upload</h2>
+              <form onSubmit={handleUploadReports} className="space-y-4">
+                <div className="flex flex-col gap-1 max-w-md">
                   <label className="text-sm font-semibold text-gray-600">Patient Phone</label>
                   <input type="tel" required value={reportPhone} onChange={(e) => setReportPhone(e.target.value)} placeholder="017XXXXXXXX" className="border rounded-md px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
-                <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
-                  <label className="text-sm font-semibold text-gray-600">Report Name</label>
-                  <input type="text" required value={reportName} onChange={(e) => setReportName(e.target.value)} placeholder="e.g. CBC / X-Ray" className="border rounded-md px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500" />
+
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-gray-600 block">Reports List</label>
+                  {reportRows.map((row, index) => (
+                    <div key={index} className="flex flex-wrap gap-4 items-center bg-gray-50 p-3 rounded-md border">
+                      <input 
+                        type="text" 
+                        required 
+                        value={row.name} 
+                        onChange={(e) => {
+                          const updated = [...reportRows];
+                          updated[index].name = e.target.value;
+                          setReportRows(updated);
+                        }} 
+                        placeholder="Report Name (e.g. CBC / X-Ray)" 
+                        className="border rounded-md px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-[200px] bg-white" 
+                      />
+                      <input 
+                        type="file" 
+                        required 
+                        onChange={(e) => {
+                          const updated = [...reportRows];
+                          updated[index].file = e.target.files?.[0] || null;
+                          setReportRows(updated);
+                        }} 
+                        className="border rounded-md px-4 py-1.5 outline-none bg-white file:mr-4 file:py-1 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 flex-1 min-w-[200px]" 
+                      />
+                      {reportRows.length > 1 && (
+                        <button type="button" onClick={() => removeReportRow(index)} className="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-sm">Remove</button>
+                      )}
+                    </div>
+                  ))}
                 </div>
-                <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
-                  <label className="text-sm font-semibold text-gray-600">Report File (PDF/Img)</label>
-                  <input type="file" id="file-upload" required onChange={(e) => setReportFile(e.target.files?.[0] || null)} className="border rounded-md px-4 py-1.5 outline-none bg-white file:mr-4 file:py-1 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+
+                <div className="flex gap-4 items-center pt-2">
+                  <button type="button" onClick={addReportRow} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md font-medium text-sm transition flex items-center gap-1">
+                    <span>+ Add Another Report</span>
+                  </button>
+
+                  <button type="submit" disabled={uploading} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md font-medium transition disabled:bg-blue-300 ml-auto">
+                    {uploading ? 'Uploading...' : 'Upload All Reports'}
+                  </button>
                 </div>
-                <button type="submit" disabled={uploading} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md font-medium transition disabled:bg-blue-300 h-[42px]">
-                  {uploading ? 'Uploading...' : 'Upload'}
-                </button>
               </form>
             </div>
             
