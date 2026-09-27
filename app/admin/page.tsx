@@ -16,6 +16,7 @@ export default function AdminDashboard() {
   const [bookings, setBookings] = useState<any[]>([])
   const [doctors, setDoctors] = useState<any[]>([])
   const [sampleRequests, setSampleRequests] = useState<any[]>([])
+  const [uploadedPhones, setUploadedPhones] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   
   // আগামী ৭ দিনের ডেট জেনারেট করা
@@ -62,7 +63,6 @@ export default function AdminDashboard() {
     }
   }, [isAuthenticated])
 
-  // আজকের তারিখের আগের সমস্ত পুরনো বুকিং অটোমেটিক ডিলিট করার ফাংশন
   async function cleanupOldBookings() {
     const today = new Date().toISOString().split('T')[0]
     try {
@@ -72,11 +72,10 @@ export default function AdminDashboard() {
     }
   }
 
-  // ৭ দিন বা তার আগের আপলোড করা রিপোর্টগুলো অটোমেটিক ডিলিট করার ফাংশন
   async function cleanupOldReports() {
     const sevenDaysAgo = new Date()
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-    const cutoffDateTime = sevenDaysAgo.toISOString() // ISO format timestamp
+    const cutoffDateTime = sevenDaysAgo.toISOString()
     try {
       await supabase.from('reports').delete().lt('created_at', cutoffDateTime)
     } catch (error) {
@@ -104,6 +103,12 @@ export default function AdminDashboard() {
     const { data: samplesData } = await supabase
       .from('sample_requests').select('*').order('created_at', { ascending: false })
     if (samplesData) setSampleRequests(samplesData)
+
+    const { data: reportsData } = await supabase.from('reports').select('patient_phone')
+    if (reportsData) {
+      const phones = Array.from(new Set(reportsData.map(r => r.patient_phone)))
+      setUploadedPhones(phones)
+    }
   }
 
   function handleLogin(e: React.FormEvent) {
@@ -161,9 +166,26 @@ export default function AdminDashboard() {
     }
   }
 
+  async function handleDeleteSampleRequest(id: number) {
+    if (confirm("Are you sure you want to delete this sample collection request?")) {
+      try {
+        await supabase.from('sample_requests').delete().eq('id', id)
+        fetchDynamicData()
+      } catch (err: any) {
+        alert("Error: " + err.message)
+      }
+    }
+  }
+
   async function handleMarkSampleComplete(id: number) {
     setSampleRequests(sampleRequests.map(req => req.id === id ? { ...req, status: 'Completed' } : req))
     await supabase.from('sample_requests').update({ status: 'Completed' }).eq('id', id)
+  }
+
+  function handleQuickUploadReport(phone: string) {
+    setReportPhone(phone)
+    setActiveTab('lab')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const downloadPDF = () => {
@@ -211,6 +233,7 @@ export default function AdminDashboard() {
       alert('All reports uploaded successfully!')
       setReportPhone('')
       setReportRows([{ name: '', file: null }])
+      fetchDynamicData()
     } catch (err: any) {
       alert("Error: " + err.message)
     } finally {
@@ -485,23 +508,42 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sampleRequests.map((req) => (
-                      <tr key={req.id} className="hover:bg-gray-50 border-b transition-colors">
-                        <td className="px-6 py-4 font-bold text-indigo-600">{req.collection_date ? new Date(req.collection_date).toLocaleDateString('en-GB') : 'N/A'}</td>
-                        <td className="px-6 py-4">
-                          <div className="font-semibold text-gray-900">{req.patient_name}</div>
-                          <div className="text-sm text-gray-600 font-mono mt-1">{req.phone}</div>
-                        </td>
-                        <td className="px-6 py-4 text-sm">{req.address}</td>
-                        <td className="px-6 py-4 text-sm font-medium text-indigo-600">{req.tests}</td>
-                        <td className="px-6 py-4">
-                          {req.status === 'Completed' ? (<span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">✓ Collected</span>) : (<span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-bold">Pending</span>)}
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          {req.status !== 'Completed' && (<button onClick={() => handleMarkSampleComplete(req.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm transition-colors">Mark Collected</button>)}
-                        </td>
-                      </tr>
-                    ))}
+                    {sampleRequests.map((req) => {
+                      const isReportUploaded = uploadedPhones.includes(req.phone)
+
+                      return (
+                        <tr key={req.id} className="hover:bg-gray-50 border-b transition-colors">
+                          <td className="px-6 py-4 font-bold text-indigo-600">{req.collection_date ? new Date(req.collection_date).toLocaleDateString('en-GB') : 'N/A'}</td>
+                          <td className="px-6 py-4">
+                            <div className="font-semibold text-gray-900">{req.patient_name}</div>
+                            <div className="text-sm text-gray-600 font-mono mt-1">{req.phone}</div>
+                          </td>
+                          <td className="px-6 py-4 text-sm">{req.address}</td>
+                          <td className="px-6 py-4 text-sm font-medium text-indigo-600">{req.tests}</td>
+                          <td className="px-6 py-4">
+                            {req.status === 'Completed' ? (<span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">✓ Collected</span>) : (<span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-bold">Pending</span>)}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              {req.status !== 'Completed' ? (
+                                <>
+                                  <button onClick={() => handleMarkSampleComplete(req.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-xs transition-colors font-medium">Mark Collected</button>
+                                  <button onClick={() => handleDeleteSampleRequest(req.id)} className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-md text-xs transition-colors font-medium">Delete</button>
+                                </>
+                              ) : (
+                                <>
+                                  {isReportUploaded ? (
+                                    <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold inline-flex items-center gap-1">✓ Report Uploaded</span>
+                                  ) : (
+                                    <button onClick={() => handleQuickUploadReport(req.phone)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-xs transition-colors font-medium">Upload Report</button>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
                     {sampleRequests.length === 0 && (
                       <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-500 font-medium">No sample collection requests found.</td></tr>
                     )}
