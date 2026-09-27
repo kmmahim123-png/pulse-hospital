@@ -4,14 +4,23 @@ import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Pulse Specialised Hospital | Consult Expert Doctors',
+  title: 'Pulse Specialised Hospital - Online Doctor Appointment & Booking',
   description:
-    'Book appointments with board-certified specialists at Pulse Specialised Hospital. Browse expert doctors by specialization and visiting schedule.',
+    'Book online appointments with expert doctors at Pulse Specialised Hospital, Dhaka. Browse specialist doctors, check schedules, and book care services easily.',
   generator: 'v0.app',
   icons: {
     icon: '/logo.png',
     apple: '/logo.png',
   },
+  keywords: [
+    'Pulse Specialised Hospital',
+    'Pulse Hospital Dhaka',
+    'Pulse Hospital Donia',
+    'Pulse Hospital online appointment',
+    'doctor booking Dhaka',
+    'Pulse Hospital Dholaipar',
+    'online doctor consultation Bangladesh',
+  ],
   verification: {
     google: 'k3njAbcHQVmj8iyCK5tcXinldr0dfCraL69GjBt3OXE',
   },
