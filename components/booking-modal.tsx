@@ -120,7 +120,6 @@ export function BookingModal({ doctor, open, onClose }: { doctor: Doctor | null,
 
       if (insertError) throw insertError
 
-      // Appointment কনফার্ম হওয়ার সাথে সাথে এসএমএস API কল করা
       const appointmentTime = doctor.schedule?.[0]?.time || 'Evening'
       try {
         await fetch('/api/send-sms', {
@@ -149,50 +148,96 @@ export function BookingModal({ doctor, open, onClose }: { doctor: Doctor | null,
   }
 
   const handleDownloadSlip = () => {
-    window.print()
-  }
+    const printContent = document.getElementById('printable-slip');
+    if (!printContent) return;
+    
+    const WindowPrt = window.open('', '', 'left=0,top=0,width=650,height=750');
+    WindowPrt?.document.write(`
+      <html>
+        <head>
+          <title>Appointment Slip - Pulse Specialised Hospital</title>
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; background: #f8fafc; color: #1e293b; }
+            .slip-container { max-width: 450px; margin: 0 auto; background: #ffffff; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
+            .hospital-header { text-align: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px; }
+            .hospital-name { font-size: 20px; font-weight: 800; color: #2563eb; margin: 0 0 4px 0; letter-spacing: 0.5px; }
+            .hospital-sub { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600; margin: 0; }
+            .success-badge { text-align: center; margin-bottom: 15px; }
+            .success-title { font-size: 18px; font-weight: 700; color: #16a34a; margin: 5px 0; }
+            .serial-box { background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px dashed #3b82f6; padding: 12px; border-radius: 12px; text-align: center; margin-bottom: 20px; }
+            .serial-label { font-size: 11px; text-transform: uppercase; color: #1e40af; font-weight: 700; display: block; }
+            .serial-number { font-size: 32px; font-weight: 900; color: #1d4ed8; margin-top: 2px; }
+            .info-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+            .info-table td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; }
+            .label { color: #64748b; font-weight: 500; width: 40%; }
+            .val { color: #0f172a; font-weight: 600; text-align: right; width: 60%; }
+            .footer-note { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 25px; border-top: 1px solid #f1f5f9; padding-top: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="slip-container">
+            <div class="hospital-header">
+              <h2 class="hospital-name">PULSE SPECIALISED HOSPITAL</h2>
+              <p class="hospital-sub">Official Appointment Slip</p>
+            </div>
+            
+            <div class="success-badge">
+              <h3 class="success-title">✓ Booking Confirmed</h3>
+            </div>
+
+            <div class="serial-box">
+              <span class="serial-label">Serial Number</span>
+              <div class="serial-number">#${String(serialNumber).padStart(2, '0')}</div>
+            </div>
+
+            <table class="info-table">
+              <tr>
+                <td class="label">Patient Name:</td>
+                <td class="val">${name} (Age: ${age})</td>
+              </tr>
+              <tr>
+                <td class="label">Phone Number:</td>
+                <td class="val">${phone}</td>
+              </tr>
+              <tr>
+                <td class="label">Doctor Name:</td>
+                <td class="val">${doctor.name}</td>
+              </tr>
+              <tr>
+                <td class="label">Room / Chamber:</td>
+                <td class="val">Room ${doctor.room || 'N/A'}</td>
+              </tr>
+              <tr>
+                <td class="label">Date & Time:</td>
+                <td class="val">${selectedDate} (${doctor.schedule?.[0]?.time || 'Evening'})</td>
+              </tr>
+              <tr>
+                <td class="label" style="border-bottom:none;">Consultation Fee:</td>
+                <td class="val" style="border-bottom:none; color: #059669; font-weight: 700;">৳${doctor.fee || '800'}</td>
+              </tr>
+            </table>
+
+            <div class="footer-note">
+              Please report to the hospital counter 15 minutes prior to schedule.<br>Thank you for choosing Pulse Specialised Hospital.
+            </div>
+          </div>
+          <script>
+            setTimeout(() => {
+              window.print();
+              window.close();
+            }, 400);
+          </script>
+        </body>
+      </html>
+    `);
+    WindowPrt?.document.close();
+  };
 
   return (
     <>
-      {/* Strict Single Page Print Styles */}
-      <style jsx global>{`
-        @media print {
-          body, html {
-            width: 100% !important;
-            height: auto !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            background: white !important;
-            overflow: visible !important;
-          }
-          body * {
-            visibility: hidden !important;
-          }
-          #printable-slip, #printable-slip * {
-            visibility: visible !important;
-          }
-          #printable-slip {
-            position: static !important;
-            width: 100% !important;
-            max-width: 400px !important;
-            margin: 20px auto !important;
-            padding: 15px !important;
-            background: white !important;
-            border: none !important;
-            box-shadow: none !important;
-            display: block !important;
-          }
-          @page {
-            size: portrait;
-            margin: 10mm;
-          }
-        }
-      `}</style>
-
       <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 sm:p-6 backdrop-blur-sm pt-20">
         <div className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col max-h-[85vh]">
           
-          {/* Header Section (ছবি ছাড়া পরিপাটি ডিজাইন) */}
           <div className="relative bg-blue-600 px-6 py-5 text-white flex-shrink-0">
             <button 
               onClick={onClose} 
@@ -221,7 +266,6 @@ export function BookingModal({ doctor, open, onClose }: { doctor: Doctor | null,
                   <span className="text-3xl font-black text-blue-600">#{String(serialNumber).padStart(2, '0')}</span>
                 </div>
 
-                {/* Slip Details Box */}
                 <div className="bg-gray-50 p-4 rounded-xl text-left space-y-2 text-sm border border-gray-200 w-full max-w-sm mx-auto">
                   <div className="flex justify-between border-b pb-2">
                     <span className="text-gray-500">Serial No:</span>
@@ -253,13 +297,12 @@ export function BookingModal({ doctor, open, onClose }: { doctor: Doctor | null,
                   </div>
                 </div>
 
-                {/* Actions (Hidden during print) */}
-                <div className="flex gap-3 pt-2 max-w-sm mx-auto w-full print:hidden">
+                <div className="flex gap-3 pt-2 max-w-sm mx-auto w-full">
                   <button 
                     onClick={handleDownloadSlip} 
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-xl transition shadow-sm text-xs flex items-center justify-center gap-2"
                   >
-                    <Download className="size-4" /> Download Slip / Print
+                    <Download className="size-4" /> Download
                   </button>
                   <Button className="px-6 rounded-xl h-11 text-sm bg-gray-200 hover:bg-gray-300 text-gray-800" onClick={onClose}>Done</Button>
                 </div>
