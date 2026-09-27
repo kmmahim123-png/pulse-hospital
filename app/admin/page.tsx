@@ -27,25 +27,18 @@ export default function AdminDashboard() {
     return { dbDate, displayDate };
   });
 
-  // ফর্মে সিলেক্ট করার জন্য ("all" ba doctor id)
   const [selectedDoctor, setSelectedDoctor] = useState<string>("all")
-  // "all" date ba specific date select korar jonno ("all" mane 7 diner aksathe)
   const [selectedDate, setSelectedDate] = useState<string>("all")
 
-  // Search বাটনে ক্লিক করার পর যেটা অ্যাপ্লাই হবে
   const [appliedDoctor, setAppliedDoctor] = useState<string>("all")
   const [appliedDate, setAppliedDate] = useState<string>("all")
 
   const [reportPhone, setReportPhone] = useState('')
-  
-  // Multiple reports upload er jonno state array (with + icon support)
   const [reportRows, setReportRows] = useState<{ name: string; file: File | null }[]>([
     { name: '', file: null }
   ])
-
   const [uploading, setUploading] = useState(false)
 
-  // Session check on initial load
   useEffect(() => {
     const authState = sessionStorage.getItem('adminAuth')
     if (authState === 'true') {
@@ -54,14 +47,12 @@ export default function AdminDashboard() {
     setIsAuthChecking(false)
   }, [])
 
-  // Initial Data Load
   useEffect(() => {
     if (isAuthenticated) {
-      cleanupOldBookings().then(() => fetchInitialData())
+      Promise.all([cleanupOldBookings(), cleanupOldReports()]).then(() => fetchInitialData())
     }
   }, [isAuthenticated])
 
-  // Auto-refresh for Bookings & Reports (প্রতি ১০ সেকেন্ডে)
   useEffect(() => {
     if (isAuthenticated) {
       const intervalId = setInterval(() => {
@@ -71,14 +62,25 @@ export default function AdminDashboard() {
     }
   }, [isAuthenticated])
 
+  // আজকের তারিখের আগের সমস্ত পুরনো বুকিং অটোমেটিক ডিলিট করার ফাংশন
   async function cleanupOldBookings() {
-    const sevenDaysAgo = new Date()
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-    const cutoffDate = sevenDaysAgo.toISOString().split('T')[0]
+    const today = new Date().toISOString().split('T')[0]
     try {
-      await supabase.from('bookings').delete().lt('booking_date', cutoffDate)
+      await supabase.from('bookings').delete().lt('booking_date', today)
     } catch (error) {
       console.error("Cleanup error:", error)
+    }
+  }
+
+  // ৭ দিন বা তার আগের আপলোড করা রিপোর্টগুলো অটোমেটিক ডিলিট করার ফাংশন
+  async function cleanupOldReports() {
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    const cutoffDateTime = sevenDaysAgo.toISOString() // ISO format timestamp
+    try {
+      await supabase.from('reports').delete().lt('created_at', cutoffDateTime)
+    } catch (error) {
+      console.error("Report cleanup error:", error)
     }
   }
 
@@ -95,7 +97,8 @@ export default function AdminDashboard() {
   async function fetchDynamicData() {
     const { data: bookingsData } = await supabase
       .from('bookings').select('*, doctors(name)')
-      .order('booking_date', { ascending: false }).order('serial_number', { ascending: true })
+      .order('booking_date', { ascending: true })
+      .order('serial_number', { ascending: true })
     if (bookingsData) setBookings(bookingsData)
 
     const { data: samplesData } = await supabase
@@ -118,7 +121,6 @@ export default function AdminDashboard() {
     sessionStorage.removeItem('adminAuth')
   }
 
-  // Search বাটনে ক্লিক করলে এই ফাংশন চলবে
   function handleSearchAppointments() {
     setAppliedDoctor(selectedDoctor)
     setAppliedDate(selectedDate)
@@ -129,33 +131,58 @@ export default function AdminDashboard() {
     await supabase.from('bookings').update({ status: 'Completed' }).eq('id', id)
   }
 
+  async function handleDeleteBooking(id: number, doctorId: number, bookingDate: string, deletedSerial: number) {
+    if (confirm("Are you sure you want to delete this appointment? Serial numbers will be updated automatically.")) {
+      try {
+        const { error: deleteError } = await supabase.from('bookings').delete().eq('id', id)
+        if (deleteError) throw deleteError
+
+        const { data: remainingBookings } = await supabase
+          .from('bookings')
+          .select('id, serial_number')
+          .eq('doctor_id', doctorId)
+          .eq('booking_date', bookingDate)
+          .gt('serial_number', deletedSerial)
+          .order('serial_number', { ascending: true })
+
+        if (remainingBookings && remainingBookings.length > 0) {
+          for (const booking of remainingBookings) {
+            await supabase
+              .from('bookings')
+              .update({ serial_number: booking.serial_number - 1 })
+              .eq('id', booking.id)
+          }
+        }
+
+        fetchDynamicData()
+      } catch (err: any) {
+        alert("Error updating serials: " + err.message)
+      }
+    }
+  }
+
   async function handleMarkSampleComplete(id: number) {
     setSampleRequests(sampleRequests.map(req => req.id === id ? { ...req, status: 'Completed' } : req))
     await supabase.from('sample_requests').update({ status: 'Completed' }).eq('id', id)
   }
 
-  // Download PDF Function
   const downloadPDF = () => {
     window.print()
   }
 
-  // Add more report row (+ icon functionality)
   const addReportRow = () => {
     setReportRows([...reportRows, { name: '', file: null }])
   }
 
-  // Remove report row
   const removeReportRow = (index: number) => {
     const updated = reportRows.filter((_, i) => i !== index)
     setReportRows(updated)
   }
 
-  // Handle multiple upload reports
   async function handleUploadReports(e: React.FormEvent) {
     e.preventDefault()
     if (!reportPhone || reportRows.length === 0) return
     
-    // Check if files are selected
     for (const row of reportRows) {
       if (!row.name || !row.file) {
         alert('Please fill all report names and select files.')
@@ -215,7 +242,6 @@ export default function AdminDashboard() {
 
   if (loading) return <div className="min-h-screen bg-gray-50 p-10 text-center font-semibold text-gray-600">Loading Professional Dashboard...</div>
 
-  // Filtering based on appliedDoctor and appliedDate (Supports "all")
   const filteredBookings = bookings.filter(b => {
     const matchDoctor = appliedDoctor === 'all' || b.doctor_id?.toString() === appliedDoctor
     const matchDate = appliedDate === 'all' || b.booking_date === appliedDate
@@ -226,31 +252,55 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-8 text-gray-900">
+      <style jsx global>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #printable-area, #printable-area * {
+            visibility: visible;
+          }
+          #printable-area {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            margin: 0;
+            padding: 20px;
+          }
+          .no-print {
+            display: none !important;
+          }
+        }
+      `}</style>
+
       <div className="max-w-6xl mx-auto">
         
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-          <h1 className="text-3xl font-bold text-blue-600">Pulse Hospital Admin</h1>
-          <button onClick={handleLogout} className="text-sm bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded-md font-medium transition">Logout</button>
-        </div>
+        <div className="no-print">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+            <h1 className="text-3xl font-bold text-blue-600">Pulse Hospital Admin</h1>
+            <button onClick={handleLogout} className="text-sm bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded-md font-medium transition">Logout</button>
+          </div>
 
-        <div className="flex gap-2 mb-8 bg-white p-1 rounded-lg shadow-sm border border-gray-200 w-fit">
-          <button 
-            onClick={() => setActiveTab('appointments')} 
-            className={`px-6 py-2 rounded-md font-semibold text-sm transition-colors ${activeTab === 'appointments' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
-          >
-            Doctor Appointments
-          </button>
-          <button 
-            onClick={() => setActiveTab('lab')} 
-            className={`px-6 py-2 rounded-md font-semibold text-sm transition-colors ${activeTab === 'lab' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
-          >
-            Lab & Reports
-          </button>
+          <div className="flex gap-2 mb-8 bg-white p-1 rounded-lg shadow-sm border border-gray-200 w-fit">
+            <button 
+              onClick={() => setActiveTab('appointments')} 
+              className={`px-6 py-2 rounded-md font-semibold text-sm transition-colors ${activeTab === 'appointments' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              Doctor Appointments
+            </button>
+            <button 
+              onClick={() => setActiveTab('lab')} 
+              className={`px-6 py-2 rounded-md font-semibold text-sm transition-colors ${activeTab === 'lab' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              Lab & Reports
+            </button>
+          </div>
         </div>
 
         {activeTab === 'appointments' && (
           <div>
-            <div className="flex flex-wrap gap-4 items-center bg-white p-3 rounded-lg shadow-sm border border-gray-200 mb-6">
+            <div className="no-print flex flex-wrap gap-4 items-center bg-white p-3 rounded-lg shadow-sm border border-gray-200 mb-6">
               <div className="flex items-center gap-2">
                 <label className="text-sm font-semibold text-gray-600">Doctor:</label>
                 <select value={selectedDoctor} onChange={(e) => setSelectedDoctor(e.target.value)} className="px-3 py-1.5 border rounded-md bg-gray-50 font-medium outline-none focus:ring-2 focus:ring-blue-500 text-sm min-w-[200px]">
@@ -286,7 +336,7 @@ export default function AdminDashboard() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className="no-print grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <h2 className="text-lg font-semibold text-gray-500">Total Appointments</h2>
                 <p className="text-4xl font-bold mt-2 text-blue-600">{filteredBookings.length}</p>
@@ -297,10 +347,10 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-12">
+            <div id="printable-area" className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-12">
               <div className="px-6 py-4 border-b bg-gray-50 flex justify-between items-center">
                 <h2 className="text-xl font-semibold">
-                  Appointments List ({appliedDate === 'all' ? 'All 7 Days' : new Date(appliedDate).toLocaleDateString('en-GB')})
+                  Pulse Hospital - Appointments List ({appliedDate === 'all' ? 'All 7 Days' : new Date(appliedDate).toLocaleDateString('en-GB')})
                 </h2>
               </div>
               <div className="overflow-x-auto">
@@ -328,11 +378,28 @@ export default function AdminDashboard() {
                         </td>
                         <td className="px-6 py-4 text-sm font-medium text-gray-700">{booking.doctors?.name || 'N/A'}</td>
                         <td className="px-6 py-4 text-sm text-gray-600">{new Date(booking.booking_date).toLocaleDateString('en-GB')}</td>
+                        
                         <td className="px-6 py-4">
-                          {booking.status === 'Completed' ? (<span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">✓ Completed</span>) : (<span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-bold">Pending</span>)}
+                          {booking.status === 'Completed' ? (
+                            <span className="text-xs text-gray-400 italic">Done</span>
+                          ) : (
+                            <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-bold">Pending</span>
+                          )}
                         </td>
+
                         <td className="px-6 py-4 text-center">
-                          {booking.status !== 'Completed' && (<button onClick={() => handleMarkComplete(booking.id)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors">Mark Done</button>)}
+                          <div className="flex items-center justify-center gap-2">
+                            {booking.status !== 'Completed' ? (
+                              <>
+                                <button onClick={() => handleMarkComplete(booking.id)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-xs transition-colors font-medium">Mark Done</button>
+                                <button onClick={() => handleDeleteBooking(booking.id, booking.doctor_id, booking.booking_date, booking.serial_number)} className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-md text-xs transition-colors font-medium">Delete</button>
+                              </>
+                            ) : (
+                              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold inline-flex items-center gap-1">
+                                ✓ Completed
+                              </span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -347,7 +414,7 @@ export default function AdminDashboard() {
         )}
 
         {activeTab === 'lab' && (
-          <div>
+          <div className="no-print">
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-8">
               <h2 className="text-xl font-semibold mb-4 text-gray-800">Report Upload</h2>
               <form onSubmit={handleUploadReports} className="space-y-4">
