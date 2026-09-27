@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     apple: '/logo.png',
   },
   verification: {
-    google: 'google81e4da1cd93288fd',
+    google: 'k3njAbcHQVmj8iyCK5tcXinldr0dfCraL69GjBt3OXE',
   },
 }
 
