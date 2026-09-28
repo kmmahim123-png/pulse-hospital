@@ -50,7 +50,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      Promise.all([cleanupOldBookings(), cleanupOldReports()]).then(() => fetchInitialData())
+      Promise.all([cleanupOldBookings(), cleanupOldReports(), cleanupOldSampleRequests()]).then(() => fetchInitialData())
     }
   }, [isAuthenticated])
 
@@ -80,6 +80,18 @@ export default function AdminDashboard() {
       await supabase.from('reports').delete().lt('created_at', cutoffDateTime)
     } catch (error) {
       console.error("Report cleanup error:", error)
+    }
+  }
+
+  // ৭ দিন বা তার আগের কমপ্লিট হওয়া স্যাম্পল কালেকশন রিকোয়েস্ট অটোমেটিক ডিলিট করার ফাংশন
+  async function cleanupOldSampleRequests() {
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    const cutoffDateTime = sevenDaysAgo.toISOString()
+    try {
+      await supabase.from('sample_requests').delete().eq('status', 'Completed').lt('created_at', cutoffDateTime)
+    } catch (error) {
+      console.error("Sample request cleanup error:", error)
     }
   }
 
